@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+
+# Import necessary modules
+import os
+import csv
+import argparse
+from datetime import date, datetime
+import calendar
+
+# Initialize the argument parser
+parser = argparse.ArgumentParser(
+    description="A simple expense tracker application to manage your finances. The application should allow users to add, delete, and view their expenses."
+)
+# create subparsers for different commands
+subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+# Add parser for add command
+add_parser = subparsers.add_parser("add", help="Add new expense")
+
+# Add arguments for description for add command
+add_parser.add_argument(
+    "--description",
+    type=str,
+    help="Description of the expense",
+    required=True,
+)
+# Add arguments amount for add command
+add_parser.add_argument(
+    "--amount",
+    type=float,
+    required=True,
+    help="Amount spent",
+)
+
+# Add parser for list command
+list_parser = subparsers.add_parser("list", help="List of all expenses")
+
+# Add parser for summary command
+summary_parser = subparsers.add_parser("summary", help="Total expenses")
+summary_parser.add_argument("--month", type=int, help="Filter summary by month (1-12)")
+
+# Add parser for delete command
+delete_parser = subparsers.add_parser("delete", help="Delete expenses with a specific id")
+delete_parser.add_argument("--id", type=int, required=True, help="Id of the expense to be deleted")
+
+# Parse the arguments
+args = parser.parse_args()
+
+# Create a csv file to store the data
+file_path = "data.csv"
+
+# Create a header for the csv file
+header = ['id', 'Date', 'Description', 'Amount']
+
+# Check if the file exists, if not create the file and write the header
+if not os.path.exists(file_path):
+    with open(file_path, "w") as data:
+        csv_writer = csv.writer(data)
+        csv_writer.writerow(header)
+
+
+# Define functions to get, save, add, list, and delete data
+def get_data():
+    """
+    Reads expense data from a CSV file and returns it as a list of dictionaries.
+
+    The function opens the CSV file specified by 'file_path', reads its contents using a CSV DictReader,
+    and appends each row to a list. The list of dictionaries is then returned.
+
+    Returns:
+        list: A list of dictionaries where each dictionary represents a row in the CSV file.
+    """
+    with open(file_path, "r") as data:
+        csv_reader = csv.DictReader(data)
+        data_list = []
+        
+        for row in csv_reader:
+            data_list.append(row)
+        return data_list    
+
+# print(get_data())
+
+def save_data(data):
+    """
+    Saves expense data to a CSV file.
+
+    The function opens the CSV file specified by 'file_path' in write mode, writes the header using a CSV DictWriter,
+    and writes the rows of data to the file.
+
+    Args:
+        data (list): A list of dictionaries where each dictionary represents a row to be written to the CSV file.
+    """
+    with open(file_path, "w") as file:
+        csv_writer = csv.DictWriter(file, fieldnames=header)
+        csv_writer.writeheader()
+        csv_writer.writerows(data)
+
+
+def add_expense(description, amount):
+    """
+    Adds a new expense to the CSV file.
+
+    The function reads the current data from the CSV file, appends a new expense with the given description and amount,
+    and then saves the updated data back to the CSV file.
+
+    Args:
+        description (str): The description of the expense.
+        amount (float): The amount of the expense.
+    """
+    existing_data = get_data()
+    last_row = existing_data[-1]
+    id = 1 if not last_row else int(last_row['id']) + 1
+
+    data = {}
+    data['id'] = id
+    data['Date'] = date.today().isoformat()
+    data['Description'] = description
+    data['Amount'] = f"${amount}"
+
+    updated_data = existing_data
+    updated_data.append(data)
+
+    save_data(updated_data)
+    print(f"Expense added successfully (ID: {id})")
+
+def list_expenses():
+    """
+    Lists all expenses from the CSV file.
+
+    The function reads the current data from the CSV file and prints each expense in a formatted manner.
+    """
+    data = get_data()
+    print(f"# {header[0]:<20} {header[1]:<15} {header[2]:<15} {header[3]:>10}")
+    for row in data:
+        print(f"# {row['id']:<20} {row['Date']:<15} {row['Description']:<15} {row['Amount']:>10}")
+
+
+def get_month(format_date):
+    """
+    Extracts the month from a date string.
+    
+    The function takes a date string in the format 'YYYY-MM-DD' and returns the month as an integer.
+    
+    Args:
+        format_date (str): A date string in the format 'YYYY-MM-DD'.
+    """
+    date_obj = datetime.fromisoformat(format_date)
+    return date_obj.month
+
+
+def get_sum(data):
+    """
+    Calculates the total sum of expenses.
+
+    The function takes a list of expense dictionaries and calculates the total amount spent.
+
+    Args:
+        data (list): A list of dictionaries where each dictionary represents an expense.
+
+    Returns:
+        float: The total amount of expenses.
+    """
+    sum = 0
+    for row in data:
+        sum += float(row["Amount"][1:])
+    return sum
+
+def calc_summary(month=None):
+    """
+    Calculates and prints the summary of expenses.
+
+    The function calculates the total expenses for the current month or a specified month and prints the summary.
+
+    Args:
+        month (int, optional): The month for which to calculate the summary. If not provided, the total expenses is calculated.
+    """
+    data = get_data()
+    if month:
+        data_list = [row for row in data if get_month(row.get("Date")) == month]
+        print(f"# Total expenses for {calendar.month_name[month]}: ${get_sum(data_list)}")
+    else:
+        print(f"# Total expenses: ${get_sum(data)}")
+    print("")
+
+def delete_expenses(task_id):
+    """
+    Deletes an expense by its ID.
+
+    The function reads the current data from the CSV file, finds the expense with the given ID, deletes it,
+    and then saves the updated data back to the CSV file.
+
+    Args:
+        task_id (int): The ID of the expense to be deleted.
+    """
+    data = get_data()
+    for index, row in enumerate(data):
+        if int(row['id']) == task_id:
+            del data[index]
+            save_data(data)
+            print("# Expense deleted successfully.")
+        else:
+            if row == data[-1]:
+                print("There is no expense with (ID: {task_id})")
+
+def main():
+    """
+    Main function to execute the expense tracker application based on the provided command.
+    
+    The function checks the command provided by the user and executes the corresponding function.
+    
+    The available commands are:
+    - add: Add a new expense
+    - list: List all expenses
+    - summary: Calculate the total expenses
+    - delete: Delete an expense by ID
+    
+    The function also prints the usage of the application if an invalid command is provided.
+    """
+    if args.command  == "add":
+        add_expense(args.description, args.amount)
+    elif args.command == "list":
+        list_expenses()
+    elif args.command == "summary":
+        calc_summary(args.month) if args.month else calc_summary()
+    elif args.command == "delete":
+        delete_expenses(args.id)
+    else:
+        print("Input --help or -h to view the usage of this app.")
+
+# Call the main function            
+if __name__ == "__main__":
+    main()
